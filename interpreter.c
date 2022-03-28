@@ -8,7 +8,16 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define SIGHUP 1
+/**
+ * BF interpreter written in C. Points of contention:
+ * 
+ * Maximum cell value is 127. Incrementing past that overflows to 0.
+ * Minimum cell value is -127. Decrementing below that underflows to 127.
+ * Minimum memory address is 0. Moving below that causes SIGSEGV.
+ * Maximum memory is infinite. Moving past the end doubles the memory size.
+ * Loops are checked when encountered at runtime. Mismatched [] causes SIGILL.
+ */
+
 #define BASE_TAPE_LEN 512
 
 char *map_file(char *path) {
@@ -21,7 +30,8 @@ char *map_file(char *path) {
     struct stat *bf_stat = malloc(1 * sizeof(struct stat));
     fstat(bf_file, bf_stat);
 
-    char *bf_mapped = mmap(NULL, bf_stat->st_size, PROT_READ, MAP_PRIVATE, bf_file, 0);
+    char *bf_mapped = mmap(NULL, bf_stat->st_size, PROT_READ, MAP_PRIVATE,
+        bf_file, 0);
 
     close(bf_file);
     free(bf_stat);
@@ -32,19 +42,21 @@ char *map_file(char *path) {
 int main(int argc, char **argv) {
     int opt;
     char *filename;
-    bool verbose = false;
+    int verbose = 0;
 
-    while ((opt = getopt(argc, argv, ":")) != -1) {
+    while ((opt = getopt(argc, argv, ":v:i")) != -1) {
         switch(opt) {
             case 'v':
-                verbose = true;
+                verbose = 1;
                 break;
+            case 'i':
+                
             default:
                 printf("Usage: ./%s [-v] /path/to/bf/file\n", argv[0]);
                 exit(1);
         }
     }
-    
+
     if (optind == (argc - 1)) {
         filename = argv[optind];
     } else {
@@ -88,7 +100,8 @@ int main(int argc, char **argv) {
                 break;
             case '[':
                 if (tape_memory[tape_pointer] == 0) {
-                    while (bf_mapped[mapped_pointer] != ']' && bf_mapped[mapped_pointer] != '\0') {
+                    while (bf_mapped[mapped_pointer] != ']'
+                        && bf_mapped[mapped_pointer] != '\0') {
                         mapped_pointer += 1;
                     }
                     if (bf_mapped[mapped_pointer] == '\0') {
@@ -121,5 +134,5 @@ int main(int argc, char **argv) {
         mapped_pointer += 1;
     }
 
-    return 0
+    return 0;
 }
